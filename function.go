@@ -3,6 +3,7 @@ package function
 import (
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 type SentryWebhook struct {
 	ID string `json:"id"`
 
+	Title   string `json:"title"`
 	Message string `json:"message"`
 	URL     string `json:"url"`
 	Culprit string `json:"culprit"`
@@ -24,6 +26,7 @@ type SentryWebhook struct {
 	Event struct {
 		EventID string `json:"event_id"`
 
+		Title       string  `json:"title"`
 		Environment string  `json:"environment"`
 		Received    float64 `json:"received"`
 		Timestamp   float64 `json:"timestamp"`
@@ -71,13 +74,25 @@ func toDiscord(webhook SentryWebhook) DiscordWebhook {
 		environment = "unknown"
 	}
 
+	title := strings.TrimSpace(webhook.Title)
+	if title == "" {
+		title = strings.TrimSpace(webhook.Event.Title)
+	}
+	if title == "" {
+		title = strings.TrimSpace(webhook.Message)
+	}
+
 	return DiscordWebhook{
 		Embeds: []Embed{
 			{
-				Title: webhook.Message,
+				Title: title,
 				URL:   webhook.URL,
 				Color: colour,
 				Fields: []Field{
+					Field{
+						Name:  "Culprit",
+						Value: webhook.Culprit,
+					},
 					Field{
 						Name:   "Project",
 						Value:  webhook.Project,
@@ -91,10 +106,6 @@ func toDiscord(webhook SentryWebhook) DiscordWebhook {
 					Field{
 						Name:  "Timestamp",
 						Value: timestamp.String(),
-					},
-					Field{
-						Name:  "Culprit",
-						Value: webhook.Culprit,
 					},
 				},
 			},
@@ -140,8 +151,15 @@ func F(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	log.Printf("raw data received: %q", data)
+
 	var webhook SentryWebhook
-	if err := json.NewDecoder(r.Body).Decode(&webhook); err != nil {
+	if err := json.Unmarshal(data, &webhook); err != nil {
 		log.Fatalln(err)
 	}
 
