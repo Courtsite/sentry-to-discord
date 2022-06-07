@@ -1,1 +1,3 @@
-.env.yaml
+build/*
+infra/.terraform
+infra/terraform.tfvars
